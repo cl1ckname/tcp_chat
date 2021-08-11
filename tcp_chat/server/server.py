@@ -1,26 +1,36 @@
 from socket import socket
 import threading
 
+from time import sleep
+
+
 class Connection(threading.Thread):
+    ''' Thread of user connection to server '''
     active = True
 
-    def __init__(self, sock):
-        super (Connection, self).__init__()
+    def __init__(self, sock, server, username):
+        super (Connection, self).__init__(daemon=True)
         self.sock = sock
+        self.server = server
+        self.username = username
 
-    def echo(self, sock: socket):
+    def mainloop(self):
         try:
             while self.active:
-                data = sock.recv(1024)
-                if data:
-                    print('Recieved',data.decode('utf-8'),'|', len(data))
-                    sock.send(data.upper())
-            sock.close()
+                data = self.sock.recv(1024)
+                if len(data) > 0:
+                    message = f'{self.username}: {data.decode("utf-8")}'
+                    print(message)
+                    self.sock.send(message.encode('utf-8'))
+                else:
+                    self.active = False
         finally:
-            sock.close()
+            self.sock.close()
 
     def run(self):
-        self.echo(self.sock)
+        self.mainloop()
+        self.server.members -= 1
+        print(self.username, 'disconnected')
 
     def stop(self):
         self.active = False
@@ -33,6 +43,10 @@ class Server:
         self.socket = socket()
         self.socket.bind((host, port))
         self.threads = []
+        self.members = 0
+
+    def recive_decoded(self, n=1024, encoding = 'utf-8'):
+        return self.socket.recv(n).decode(encoding)
 
     def start(self):
         print('Start server')
@@ -40,11 +54,20 @@ class Server:
         try:
             while True:
                 sock, addr = self.socket.accept()
-                print("Connected to", addr)
-                thread = Connection(sock)
-                self.threads.append(thread)
-                print('Num of connections:', len(self.threads))
-                thread.start()
+                username = sock.recv(1024).decode('utf-8')
+                print(122, username)
+                if username:
+                    sock.send(b'200')
+                    print("Connected to", addr, 'as', username)
+                    thread = Connection(sock, self, username)
+                    self.threads.append(thread)
+                    self.members += 1
+                    print('Num of connections:', len(self.threads))
+                    thread.start()
+                else:
+                    sock.send(b'401')
+                    sock.close()
+                    print('Authentificated error with', addr)
         except KeyboardInterrupt:
             print(' - you tab CTRL-C')
         finally:
@@ -52,19 +75,3 @@ class Server:
             for thread in self.threads:
                 thread.stop()
             self.socket.close()
-# HOST = '192.168.0.53'
-# PORT = 8888
-
-# s = socket.socket()
-# s.bind((HOST, PORT))
-# s.listen(True)
-
-# conn, addr = s.accept()
-# print(addr)
-
-# while True:
-#     data = conn.recv(1024)
-#     if not data:
-#         break
-#     conn.send(data.upper())
-# conn.close()
