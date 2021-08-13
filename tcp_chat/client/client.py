@@ -6,25 +6,34 @@ class Client:
     host = None
     port = None
     connected = False
-    def __init__(self, username):
+    def __init__(self, username, chat_id):
         self.socket = socket.socket()
         self.username = username
+        self.chat_id = chat_id
 
     def connect(self, host, port):
         self.host = host
         self.port = port
         try:
             self.socket.connect((host,port))
-            self.send(self.username)
+            self.send(f'{self.username}_{self.chat_id}')
             answer = self.receive()
             assert answer == '200'
             self.connected = True
-            print('Connected!')
             listen_thread = threading.Thread(target=self.listen, daemon=True)
             listen_thread.start()
+        except AssertionError:
+            if answer == '403':
+                print('The user with such name already connect')
+                self.socket.close()
+            elif answer == '401':
+                print('Authorization error')
+                self.socket.close()
         except:
             print('Connection error')
             self.socket.close()
+        else:
+            print('Connected!')
 
     def shell(self):
         try:
