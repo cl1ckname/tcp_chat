@@ -37,7 +37,7 @@ class Client:
 
     def shell(self):
         try:
-            while True:
+            while self.connected:
                 sleep(0.2)
                 message = input('>> ')
                 if not message:
@@ -57,18 +57,23 @@ class Client:
             self.close()
     
     def listen(self):
-        print()
         try:
             while self.connected:
                 data = self.socket.recv(1024)
                 if len(data) > 0:
                     message = data.decode("utf-8")
-                    print(message)
+                    if message=='/exit':
+                        self.connected = False
+                    elif message.startswith(self.username):
+                        print(message)
+                    else:
+                        print('\n',message)
                 else:
                     self.connected = False
         finally:
-            print('Stop listening...')
+            print('\nStop listening...')
             self.close()
+            exit()
 
     def send(self, message: str):
         self.socket.send(message.encode('utf-8'))

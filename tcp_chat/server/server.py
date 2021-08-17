@@ -1,7 +1,11 @@
 import threading
+import logging
+import logging.handlers
 from abc import ABC, abstractmethod
 from socket import socket
+import time
 from typing import MutableSet
+
 
 class LoopThread(ABC, threading.Thread):
     ''' LoopThread runs on a separate thread and includes an infinite loop that executes `main` and calls `final` upon completion. '''
@@ -27,8 +31,12 @@ class LoopThread(ABC, threading.Thread):
         ''' Stops the loop '''
         self.active = False
 
+class Chat:
+    pass
+
 class Connection(LoopThread):
     ''' Thread of user connection to server '''
+    chat:Chat = None
     def __init__(connection, sock: socket, username:str, chat_id:str):
         super().__init__(daemon=True)
         connection.sock = sock
@@ -37,7 +45,10 @@ class Connection(LoopThread):
     
     def receive(connection) -> str:
         ''' Receives and decodes data '''
-        return connection.sock.recv(1024).decode('utf-8')
+        try:
+            return connection.sock.recv(1024).decode('utf-8')
+        except OSError:
+            return ''
 
     def send(connection, message: str):
         ''' Encode and send message to client '''
@@ -51,23 +62,31 @@ class Server:
         self.socket:socket = socket()
         self.socket.bind((host, port))
         self.connections = {}
-        self.chats = {}
+
+        self.logger = logging.getLogger('TCP_server')
+        self.logger.setLevel('INFO')
+        self.logger.addHandler(logging.handlers.SysLogHandler(address='/dev/log'))
 
         class Connection_(Connection):
             def main(connection):
                 data = connection.receive()
                 if len(data) > 0:
                     message = f'{connection.username}: {data}'
-                    connection.send(message)
+                    self.logger.info(message)
+                    connection.chat.send(connection.username, message)
                 else:
                     connection.stop()
+                pass
 
             def final(connection):
+                connection.send('/exit')
                 connection.sock.close()
                 del self.connections[connection.username]
                 print(connection.username, 'disconnected')
 
         self.Connection = Connection_ 
+        self.chats:dict[str, Connection_] = {}
+
 
     def recive(self, n=1024, encoding = 'utf-8'):
         return self.socket.recv(n).decode(encoding)
@@ -97,11 +116,14 @@ class Server:
     def join_chat(self, chat_id, username):
         user = self.connections[username]
         if chat_id in self.chats.keys():
-            self.chats[chat_id].join(user)
+            self.chats[chat_id].join_user(user)
+            user.chat = self.chats[chat_id]
         else:
             chat = Chat(chat_id)
+            user.chat = chat
             self.chats[chat_id] = chat
-            chat.join(user)
+            chat.start()
+            chat.join_user(user)
 
     def start(self):
         print('Start server')
@@ -122,21 +144,37 @@ class Server:
 
 
 class Chat(LoopThread):
+    ''' Class for implementing the logic for sending messages to groups '''
     active = True
-    id: int = None
-    def __init__(self, id:int):
+    id: str = None
+    def __init__(self, id:str):
+        super(Chat, self).__init__()
         self.id = id
         self.members:MutableSet[Connection] = set()
+        self.lock = threading.Lock()
     
-    def join(self, conn: Connection):
+    def join_user(self, conn: Connection):
+        self.lock.acquire()
         self.members.add(conn)
+        self.lock.release()
+        print(self.id, '-', self.members)
+
+    def send(self, sender, text):
+        ''' Send message to each member '''
+        print(text,1213)
+        self.lock.acquire()
+        for member in self.members:
+            member.send(f'{sender} - {text}')
+        self.lock.release()
 
     def main(self):
-        for conn_sender in self.members:
-            data = conn_sender.receive()
-            if len(data):
-                for conn_receiver in self.members:
-                    conn_receiver.send(data)
+        
+        # for conn_sender in self.members:
+        #     data = conn_sender.receive()
+        #     if len(data):
+        #         for conn_receiver in self.members:
+        #             conn_receiver.send(f'{conn_sender.username}-{data}')
+        time.sleep(0.1)
 
     def final(self):
         print('Chat error, chat failed')
