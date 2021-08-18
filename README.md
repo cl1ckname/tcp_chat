@@ -1,11 +1,12 @@
 # Tcp_chat
+[![PyPI version](https://badge.fury.io/py/cn-tcp-server.svg)](https://badge.fury.io/py/cn-tcp-server)  
 A simple tcp chat on python
 ## Installing
 
 Using pip:
 
 ```
-$ pip3 install cn_tcp_server
+$ pip3 install cn-tcp-server
 ```
 
 Using git:
