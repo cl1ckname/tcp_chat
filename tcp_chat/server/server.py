@@ -1,3 +1,5 @@
+# -*- coding: utf-8 -*
+
 import threading
 import logging
 import logging.handlers
@@ -68,12 +70,13 @@ class Server:
         self.logger.addHandler(logging.handlers.SysLogHandler(address='/dev/log'))
 
         class Connection_(Connection):
+            ''' Фn internal connection class that defines the logic for a specific server '''
             def main(connection):
                 data = connection.receive()
                 if len(data) > 0:
                     message = f'{connection.username}: {data}'
                     self.logger.info(message)
-                    connection.chat.send(connection.username, message)
+                    connection.chat.send(connection.username, data)
                 else:
                     connection.stop()
                 pass
@@ -88,12 +91,24 @@ class Server:
         self.chats:dict[str, Connection_] = {}
 
 
-    def recive(self, n=1024, encoding = 'utf-8'):
+    def receive(self, n:int = 1024, encoding:str = 'utf-8') -> str:
+        ''' Receives and decrypts data from a socket '''
         return self.socket.recv(n).decode(encoding)
 
-    def auth(self ,sock: socket, addr):
+    def auth(self ,sock: socket, addr: str) -> Connection:
+        ''' Attempts to authorize a user on this server. Sends one of three possible response codes to the client:
+            * 200 - authorization is successful
+            * 400 - invalid data
+            * 403 - a user with this nickname is already logged in \n  
+            Returns a connection object.'''
         data = sock.recv(1024).decode('utf-8')
-        username, chat_id  = data.split('_')
+        try:
+            username, chat_id  = data.split('_')
+        except ValueError:
+            sock.send(b'400')
+            sock.close()
+            print('Authentificated error with', addr)
+            return None
         if username and chat_id and username not in self.connections.keys():
             print("Connected to", addr, 'as', username)
             sock.send(b'200')
@@ -108,12 +123,13 @@ class Server:
             sock.close()
             return None
         else:
-            sock.send(b'401')
+            sock.send(b'400')
             sock.close()
             print('Authentificated error with', addr)
             return None
 
     def join_chat(self, chat_id, username):
+        ''' Adds a user to the chat with the chat_id identifier. If there is no such chat, then creates it '''
         user = self.connections[username]
         if chat_id in self.chats.keys():
             self.chats[chat_id].join_user(user)
@@ -126,6 +142,7 @@ class Server:
             chat.join_user(user)
 
     def start(self):
+        ''' Starts mainloop of server '''
         print('Start server')
         self.socket.listen(5)
         try:
@@ -148,19 +165,20 @@ class Chat(LoopThread):
     active = True
     id: str = None
     def __init__(self, id:str):
-        super(Chat, self).__init__()
+        super(Chat, self).__init__(daemon=True)
         self.id = id
         self.members:MutableSet[Connection] = set()
         self.lock = threading.Lock()
     
     def join_user(self, conn: Connection):
+        ''' Joins user to member set '''
         self.lock.acquire()
         self.members.add(conn)
         self.lock.release()
         print(self.id, '-', self.members)
 
     def send(self, sender, text):
-        ''' Send message to each member '''
+        ''' Sends message to each member '''
         print(text,1213)
         self.lock.acquire()
         for member in self.members:
@@ -174,9 +192,10 @@ class Chat(LoopThread):
         #     if len(data):
         #         for conn_receiver in self.members:
         #             conn_receiver.send(f'{conn_sender.username}-{data}')
-        time.sleep(0.1)
+        time.sleep(1)
 
     def final(self):
-        print('Chat error, chat failed')
+        ''' Close all connections of this chat '''
+        print('Chat closed')
         for conn in self.members:
             conn.stop()            

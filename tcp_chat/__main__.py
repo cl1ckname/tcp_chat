@@ -1,6 +1,7 @@
+#!/bin/python3
 import argparse
-from server import Server
-from client import Client
+from .server import Server
+from .client import Client
 from time import sleep
 
 parser = argparse.ArgumentParser(description='')

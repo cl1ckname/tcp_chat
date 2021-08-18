@@ -3,6 +3,7 @@ import threading
 from time import sleep
 
 class Client:
+    ''' A class that implements the logic of connecting, authorizing, and exchanging messages with the server '''
     host = None
     port = None
     connected = False
@@ -12,6 +13,7 @@ class Client:
         self.chat_id = chat_id
 
     def connect(self, host, port):
+        ''' Sends authorization information to the server and responds to the returned code. Starts listen thread. '''
         self.host = host
         self.port = port
         try:
@@ -36,6 +38,7 @@ class Client:
             print('Connected!')
 
     def shell(self):
+        ''' A shell for reading messages from the console and sending them to the server '''
         try:
             while self.connected:
                 sleep(0.2)
@@ -57,6 +60,7 @@ class Client:
             self.close()
     
     def listen(self):
+        ''' Listens to the socket and outputs messages '''
         try:
             while self.connected:
                 data = self.socket.recv(1024)
@@ -76,14 +80,17 @@ class Client:
             exit()
 
     def send(self, message: str):
+        ''' Encodes and send message'''
         self.socket.send(message.encode('utf-8'))
     
     def receive(self):
+        ''' Receives and returns message '''
         data = self.socket.recv(1024)
         return data.decode('utf-8')
     
 
     def close(self):
+        ''' Close connection and stops listen and shell loops '''
         self.connected = False
         self.socket.close()
 

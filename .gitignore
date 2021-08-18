@@ -1,3 +1,7 @@
 **/__pycache__
+**/*.pyc
 .venv
 .vscode
+.pypirc
+dist
+cn_tcp_server.egg-info
